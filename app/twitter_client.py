@@ -7,7 +7,7 @@ import time
 
 def _connect_to_endpoint(url, headers, params, next_token=None):
     if next_token:
-        params['next_token'] = next_token
+        params['pagination_token'] = next_token
     response = requests.request("GET", url, headers=headers, params=params)
     if response.status_code != 200:
         raise Exception(response.status_code, response.text)
@@ -24,7 +24,7 @@ class TwitterClient:
         headers = {"Authorization": "Bearer {}".format(self.bearer_token)}
         return headers
 
-    def get_users_followers(self, user_id, users_number=3000, output_file="users_followers.json"):
+    def get_users_followers(self, user_id, users_number, output_file="users_followers.json"):
         next_token = None
         search_url = f"{self.base_url}/users/{user_id}/followers"
         users_stored = []
@@ -35,17 +35,26 @@ class TwitterClient:
             'max_results': 1000
         }
         while len(users_stored) < users_number:
-            headers = self._create_headers()
-            json_response = _connect_to_endpoint(search_url, headers, query_params, next_token)
-            if json_response['meta']['result_count'] == 0:
-                break
-            for tweet in json_response['data']:
-                users_stored.append(tweet)
+            try:
+                headers = self._create_headers()
+                json_response = _connect_to_endpoint(search_url, headers, query_params, next_token)
+                if json_response['meta']['result_count'] == 0:
+                    break
+                for user in json_response['data']:
+                    users_stored.append(user)
+                print(f"...{len(users_stored)} users ingested")
+                try:
+                    next_token = json_response["meta"]["next_token"]
+                except KeyError:
+                    break
+            except Exception as ex:
+                print(ex)
+        return users_stored
 
-    def get_tweets(self, query, start_time, num_tweets, output_fh):
+    def get_tweets(self, query, start_time, tweets_number, output_fh):
         next_token = None
-        tweets_stored = 0
-        search_url = ""
+        tweets_stored = []
+        search_url = f"{self.base_url}/tweets/search/all"
         query_params = {
             'query': query,
             'start_time': start_time,
@@ -54,14 +63,26 @@ class TwitterClient:
             'expansions': 'author_id',
             'max_results': 500
         }
-        while tweets_stored < num_tweets:
-            headers = self._create_headers()
-            json_response = _connect_to_endpoint(search_url, headers, query_params, next_token)
+        while len(tweets_stored) < tweets_number:
+            try:
+                headers = self._create_headers()
+                json_response = _connect_to_endpoint(search_url, headers, query_params, next_token)
+                if json_response['meta']['result_count'] == 0:
+                    break
+                for tweet in json_response['data']:
+                    tweets_stored.append(tweet)
+                print(f"...{len(tweets_stored)} tweets ingested")
+                try:
+                    next_token = json_response["meta"]["next_token"]
+                except KeyError:
+                    break
+            except Exception as ex:
+                print(ex)
+        return tweets_stored
 
     def get_user(self, username):
         search_url = f"{self.base_url}/users/by/username/{username}"
         query_params = {'user.fields': ",".join(const.user_fields)}
         headers = self._create_headers()
         json_response = _connect_to_endpoint(search_url, headers, query_params)
-        return json_response
-
+        return json_response["data"]

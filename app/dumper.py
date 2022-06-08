@@ -7,7 +7,7 @@ from app.twitter_client import TwitterClient
 
 
 class Database:
-    data_lake: str = "data_lake"
+    data_lake: str = "data-lake"
     config: str = "config"
 
 
@@ -58,7 +58,9 @@ class Dumper:
         print(f"...get {username} user info")
         user = self.twitter_client.get_user(username=username)
         print(f"...get {username} followers")
-        users_followers = self.twitter_client.get_users_followers(user.id)
+        users_followers = self.twitter_client.get_users_followers(user["id"], 3000)
+        print(f"...save {len(users_followers)} followers")
+        self.mongo_client[Database.data_lake][Collection.user_followers].insert_many(users_followers)
         # print(f"...get {username} tweets")
         # user_tweets = self.twitter_client.get_all_tweets(self._user_tweets_query(), start_time)
         # print(f"...save {len(user_tweets)} {username} tweets")
