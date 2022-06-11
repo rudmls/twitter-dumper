@@ -21,7 +21,7 @@ def main():
     try:
         config = read_arguments(sys.argv)
         dumper = Dumper(config)
-        dumper.start_streaming()
+        dumper.start()
     except Exception as ex:
         print(ex)
 

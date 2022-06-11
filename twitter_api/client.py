@@ -1,24 +1,18 @@
-from datetime import datetime, timezone, timedelta
-
-import app.const as const
-import requests
 import time
+from datetime import datetime, timezone, timedelta
+import twitter_api.const as const
+import requests
 
 
 class BaseClient:
-    base_url = "https://api.twitter.com/2"
+    _base_url = "https://api.twitter.com/2"
 
     def __init__(self, bearer_token: str):
         self.bearer_token = bearer_token
 
-    def _bearer_oauth(self, r):
-        """
-        Method required by bearer token authentication.
-        """
-
-        r.headers["Authorization"] = f"Bearer {self.bearer_token}"
-        r.headers["User-Agent"] = "v2FilteredStreamPython"
-        return r
+    def _bearer_oauth(self, request):
+        request.headers["Authorization"] = f"Bearer {self.bearer_token}"
+        return request
 
     def _connect_to_endpoint(self, method, url, params=None, json=None, stream=False):
         response = requests.request(
@@ -41,7 +35,7 @@ class Client(BaseClient):
 
     def get_users_followers(self, user_id, users_number):
         next_token = None
-        search_url = f"{self.base_url}/users/{user_id}/followers"
+        search_url = f"{self._base_url}/users/{user_id}/followers"
         users_stored = []
         query_params = {
             'tweet.fields': ",".join(const.tweet_fields),
@@ -67,11 +61,13 @@ class Client(BaseClient):
                 print(ex)
         return users_stored
 
-    def get_all_tweets(self, query, start_time, tweets_number):
+    def get_all_tweets(self, query, tweets_number, start_time, end_time=None) -> tuple:
         next_token = None
         end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         tweets_stored = []
-        search_url = f"{self.base_url}/tweets/search/all"
+        includes_tweets_stored = []
+        includes_users_stored = []
+        search_url = f"{self._base_url}/tweets/search/all"
         while start_time < end_time and len(tweets_stored) < tweets_number:
             try:
                 query_params = {
@@ -80,7 +76,9 @@ class Client(BaseClient):
                     'end_time': (end_time - timedelta(seconds=15)).strftime(const.iso_time_format),
                     'tweet.fields': ",".join(const.tweet_fields),
                     'user.fields': ",".join(const.user_fields),
-                    'expansions': 'author_id',
+                    'place.fields': ",".join(const.place_fields),
+                    'media.fields': ",".join(const.media_fields),
+                    'expansions': ",".join(const.expansions),
                     'max_results': 500
                 }
                 if next_token:
@@ -88,8 +86,20 @@ class Client(BaseClient):
                 json_response = self._connect_to_endpoint("GET", search_url, query_params).json()
                 if json_response['meta']['result_count'] == 0:
                     break
-                for tweet in json_response['data']:
-                    tweets_stored.append(tweet)
+                # with open('json_data.json', 'w', encoding="utf-8") as outfile:
+                #     json.dump(json_response, outfile, indent=4, ensure_ascii=False)
+                # tweets
+                tweets_stored.extend(
+                    list(dict(("_id", v) if k == "id" else (k, v) for k, v in _.items())
+                         for _ in json_response['data']))
+                # includes tweets
+                includes_tweets_stored.extend(
+                    list(dict(("_id", v) if k == "id" else (k, v) for k, v in _.items())
+                         for _ in json_response["includes"]["tweets"]))
+                # includes users
+                includes_users_stored.extend(
+                    list(dict(("_id", v) if k == "id" else (k, v) for k, v in _.items())
+                         for _ in json_response["includes"]["users"]))
                 print(f"...{len(tweets_stored)} tweets ingested")
                 iso_time = tweets_stored[len(tweets_stored) - 1]["created_at"]
                 end_time = datetime.strptime(iso_time, const.iso_time_format)
@@ -100,11 +110,15 @@ class Client(BaseClient):
                 time.sleep(1)
             except Exception as ex:
                 print(ex)
-        return tweets_stored
+        # remove duplicates values
+        tweets_stored = {i['_id']: i for i in reversed(tweets_stored)}.values()
+        includes_tweets_stored = {i['_id']: i for i in reversed(includes_tweets_stored)}.values()
+        includes_users_stored = {i['_id']: i for i in reversed(includes_users_stored)}.values()
+        return tweets_stored, includes_tweets_stored, includes_users_stored
 
     def get_user(self, username):
         try:
-            search_url = f"{self.base_url}/users/by/username/{username}"
+            search_url = f"{self._base_url}/users/by/username/{username}"
             query_params = {'user.fields': ",".join(const.user_fields)}
             json_response = self._connect_to_endpoint("GET", search_url, query_params).json()
             return json_response["data"]

@@ -1,9 +1,17 @@
 import json
 from dataclasses import dataclass
+from enum import Enum
+
+from bson import ObjectId
 from pymongo import MongoClient
 
 import twitter_api
 from app.config import Config
+
+
+class TweetType(Enum):
+    user: str = "user"
+    search: str = "search"
 
 
 class Database:
@@ -14,10 +22,12 @@ class Database:
 
 class Collection:
     user_followers: str = "users_followers"
-    user_tweets: str = "user_tweets"
-    search_tweets: str = "search_tweets"
     fetch_infos: str = "fetch_infos"
     stream_search_tweets: str = "stream_search_tweets"
+    user_tweets: str = "user_tweets"
+    search_tweets: str = "search_tweets"
+    includes_tweets: str = "includes_tweets"
+    users: str = "includes_users"
 
 
 @dataclass
@@ -73,38 +83,56 @@ class Dumper:
         except Exception as ex:
             print(ex)
 
+    def _save_tweets(self, tweet_type, tweets, includes_tweets, includes_users):
+        print(f"...save {len(tweets)} search tweets")
+        tweets_collection = Collection.search_tweets if tweet_type == TweetType.search else Collection.user_tweets
+        collection = self._mongo_client[Database.data_lake][tweets_collection]
+        collection.delete_many({'_id': {"$in": [tweet["_id"] for tweet in tweets]}})
+        collection.insert_many(tweets)
+        print(f"...save {len(includes_tweets)} includes tweets")
+        collection = self._mongo_client[Database.data_lake][Collection.includes_tweets]
+        collection.delete_many({'_id': {"$in": [tweet["_id"] for tweet in includes_tweets]}})
+        collection.insert_many(includes_tweets)
+        print(f"...save {len(includes_users)} includes users")
+        collection = self._mongo_client[Database.data_lake][Collection.users]
+        collection.delete_many({'_id': {"$in": [user["_id"] for user in includes_users]}})
+        collection.insert_many(includes_users)
+
     def _full_dump(self):
-        username = self._config.dumper.username
-        start_time = self._config.dumper.tweet.start_time
-        # print(f"...get {username} user info")
-        # user = self.twitter_client.get_user(username=username)
-        # print(f"...get {username} followers")
-        # users_followers = self.twitter_client.get_users_followers(user["id"], 3000)
-        # print(f"...save {len(users_followers)} followers")
-        # self.mongo_client[Database.data_lake][Collection.user_followers].insert_many(users_followers)
-        print(f"...get {username} tweets")
-        user_tweets = self._twitter_client.get_all_tweets(self._user_tweets_query(), start_time, 1000)
-        # print(f"...save {len(user_tweets)} {username} tweets")
-        # self.mongo_client[Database.data_lake][Collection.user_tweets].insert_many(user_tweets)
-        # print(f"...get search about {username}")
-        # search_tweets = self.twitter_client.get_all_tweets(self._search_tweets_query(), start_time)
-        # print(f"...save {len(search_tweets)} search about {username}")
-        # self.mongo_client[Database.data_lake][Collection.search_tweets].insert_many(search_tweets)
-        # print(f"...get {username} followers")
-        # users_followers = self.twitter_service.get_users_followers(
-        #     user_id=user.id,
-        #     max_results_limit=user.public_metrics['followers_count'])
-        # print(f"...save {len(users_followers)} followers")
-        # self.mongo_client[Database.data_lake][Collection.user_followers].insert_many(users_followers)
-        # print("...save fetch infos")
-        # self.mongo_client[Database.config][Collection.fetch_infos].insert_one({
-        #     "fetchDate": user_tweets[0]['created_at'],
-        #     "tweet": {
-        #         "usersFollowers": len(users_followers),
-        #         "userTweets": len(user_tweets),
-        #         "searchTweets": len(search_tweets)
-        #     }
-        # })
+        try:
+            username = self._config.dumper.username
+            start_time = self._config.dumper.tweet.start_time
+            print(f"...get {username} user info")
+            user = self._twitter_client.get_user(username=username)
+            # print(f"...get {username} followers")
+            # users_followers = self._twitter_client.get_users_followers(user["id"], 3000)
+            # print(f"...save {len(users_followers)} followers")
+            # self.mongo_client[Database.data_lake][Collection.user_followers].insert_many(users_followers)
+            # print(f"...get {username} tweets")
+            # user_tweets, includes_tweets, includes_users = \
+            #     self._twitter_client.get_all_tweets(self._user_tweets_query(), start_time, 15000)
+            # self._save_tweets(TweetType.user, user_tweets, includes_tweets, includes_users)
+            print(f"...get search tweets about {username}")
+            search_tweets, includes_tweets, includes_users = \
+                self._twitter_client.get_all_tweets(self._search_tweets_query(), 15000, start_time)
+            self._save_tweets(TweetType.search, search_tweets, includes_tweets, includes_users)
+            # print(f"...get {username} followers")
+            # users_followers = self.twitter_service.get_users_followers(
+            #     user_id=user.id,
+            #     max_results_limit=user.public_metrics['followers_count'])
+            # print(f"...save {len(users_followers)} followers")
+            # self.mongo_client[Database.data_lake][Collection.user_followers].insert_many(users_followers)
+            # print("...save fetch infos")
+            # self.mongo_client[Database.config][Collection.fetch_infos].insert_one({
+            #     "fetchDate": user_tweets[0]['created_at'],
+            #     "tweet": {
+            #         "usersFollowers": len(users_followers),
+            #         "userTweets": len(user_tweets),
+            #         "searchTweets": len(search_tweets)
+            #     }
+            # })
+        except Exception as ex:
+            print(ex)
 
     def _light_dump(self, last_fetch_info):
         pass
