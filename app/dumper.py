@@ -21,10 +21,12 @@ class Dumper:
 
     def start(self):
         try:
-            print("[ dump user tweets ]")
-            self._dump_user_tweets()
-            print("[ dump search tweets ]")
-            self._dump_search_tweets()
+            print("[ dump user followers ]")
+            self._dump_users_followers()
+            # print("[ dump user tweets ]")
+            # self._dump_user_tweets()
+            # print("[ dump search tweets ]")
+            # self._dump_search_tweets()
         except Exception as ex:
             print(ex)
 
@@ -52,9 +54,8 @@ class Dumper:
 
     def _dump_users_followers(self):
         username = self._config.dumper.username
-        user = self._twitter_client.get_user(username=username)
-        users_followers = self._twitter_client.get_users_followers(user["id"], 15000)
-        self._mongodb_cluster.save_users_followers(users_followers)
+        subscribed_users = self._twitter_client.get_subscribed_users(username)
+        self._mongodb_cluster.save_subscribed_users(subscribed_users)
 
     def _dump_user_tweets(self):
         start_time = self._mongodb_cluster.get_tweet_created_at("user_tweets", pymongo.DESCENDING)

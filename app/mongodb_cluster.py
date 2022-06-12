@@ -23,8 +23,8 @@ class MongoDbCluster:
         except Exception as ex:
             print(ex)
 
-    def save_users_followers(self, users_followers: list):
-        self._save_documents("data_lake", "users_followers", users_followers)
+    def save_subscribed_users(self, subscribed_users: list):
+        self._save_documents("data_lake", "subscribed_users", subscribed_users)
 
     def save_includes_users(self, includes_users: list):
         self._save_documents("data_lake", "includes_users", includes_users)
