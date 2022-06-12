@@ -27,14 +27,11 @@ class StreamingClient(BaseClient):
 
     def get_stream(self):
         search_url = f"{self._base_url}/tweets/search/stream"
-        expansions = [
-            "attachments.poll_ids", "attachments.media_keys", "author_id", "entities.mentions.username", "geo.place_id",
-            "in_reply_to_user_id", "referenced_tweets.id", "referenced_tweets.id.author_id"]
         query_params = {
             "place.fields": ",".join(const.place_fields),
             "poll.fields": ",".join(const.poll_fields),
             'tweet.fields': ",".join(const.tweet_fields),
             'user.fields': ",".join(const.user_fields),
-            "expansions": ",".join(expansions)}
+            "expansions": ",".join(const.expansions)}
         response = self._connect_to_endpoint(method="GET", url=search_url, params=query_params, stream=True)
         return response

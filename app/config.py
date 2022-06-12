@@ -15,7 +15,7 @@ class MongoDbConfig:
 
 
 @dataclass
-class Tweet:
+class TweetsConfig:
     start_time: datetime
     max_number: int
 
@@ -23,7 +23,8 @@ class Tweet:
 @dataclass
 class DumperConfig:
     username: str
-    tweet: Tweet
+    user_tweets: TweetsConfig
+    search_tweets: TweetsConfig
 
 
 @dataclass
